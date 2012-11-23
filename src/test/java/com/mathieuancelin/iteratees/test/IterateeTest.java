@@ -172,7 +172,7 @@ public class IterateeTest {
     @Test
     public void testPushEnumerator() throws Exception {
         final CountDownLatch latch = new CountDownLatch(5);
-        PushEnumerator<String> pushEnum = Enumerator.imperative(String.class);
+        PushEnumerator<String> pushEnum = Enumerator.unicast(String.class);
         pushEnum.applyOn(Iteratee.foreach(new Function<String, Unit>() {
             @Override
             public Unit apply(String t) {
@@ -198,9 +198,9 @@ public class IterateeTest {
     @Test
     public void testInterleave() throws Exception {
         final CountDownLatch latch = new CountDownLatch(5);
-        PushEnumerator<String> pushEnum1 = Enumerator.imperative(String.class);
-        PushEnumerator<String> pushEnum2 = Enumerator.imperative(String.class);
-        PushEnumerator<String> pushEnum3 = Enumerator.imperative(String.class);
+        PushEnumerator<String> pushEnum1 = Enumerator.unicast(String.class);
+        PushEnumerator<String> pushEnum2 = Enumerator.unicast(String.class);
+        PushEnumerator<String> pushEnum3 = Enumerator.unicast(String.class);
         Enumerator<String> global = Enumerator.interleave(pushEnum1, pushEnum2, pushEnum3);
         global.applyOn(Iteratee.foreach(new Function<String, Unit>() {
             @Override
@@ -230,7 +230,7 @@ public class IterateeTest {
     @Test
     public void testPushEnumeratorSched2() throws Exception {
         final CountDownLatch latch = new CountDownLatch(200);
-        PushEnumerator<String> pushEnum = Enumerator.fromCallback(10, TimeUnit.MILLISECONDS, 
+        PushEnumerator<String> pushEnum = Enumerator.generate(10, TimeUnit.MILLISECONDS, 
                 new Function<Unit, Option<String>>() {
             @Override
             public Option<String> apply(Unit t) {
@@ -253,7 +253,7 @@ public class IterateeTest {
     @Test
     public void testPushEnumeratorSched() throws Exception {
         final CountDownLatch latch = new CountDownLatch(10);
-        PushEnumerator<String> pushEnum = Enumerator.fromCallback(1, TimeUnit.SECONDS, 
+        PushEnumerator<String> pushEnum = Enumerator.generate(1, TimeUnit.SECONDS, 
                 new Function<Unit, Option<String>>() {
             @Override
             public Option<String> apply(Unit t) {
@@ -278,7 +278,7 @@ public class IterateeTest {
     public void testHubEnumerator() throws Exception {
         final CountDownLatch latch = new CountDownLatch(6);
         Enumerator<String> enumerator = Enumerator.of("Hello", "World");
-        HubEnumerator<String> hub = Enumerator.hub(enumerator);
+        HubEnumerator<String> hub = Enumerator.broadcast(enumerator);
         Iteratee<String, Unit> it1 = Iteratee.foreach(new Function<String, Unit>() {
             @Override
             public Unit apply(String t) {
@@ -312,14 +312,14 @@ public class IterateeTest {
     @Test
     public void testHubEnumerator2() throws Exception {
         final CountDownLatch latch = new CountDownLatch(60);
-        Enumerator<String> enumerator = Enumerator.fromCallback(10, TimeUnit.MILLISECONDS, new Function<Unit, Option<String>>() {
+        Enumerator<String> enumerator = Enumerator.generate(10, TimeUnit.MILLISECONDS, new Function<Unit, Option<String>>() {
             @Override
             public Option<String> apply(Unit t) {
                 String date = System.currentTimeMillis() + "";
                 return Option.apply(date);
             }
         });
-        HubEnumerator<String> hub = Enumerator.hub(enumerator);
+        HubEnumerator<String> hub = Enumerator.broadcast(enumerator);
         Iteratee<String, Unit> it1 = Iteratee.foreach(new Function<String, Unit>() {
             @Override
             public Unit apply(String t) {

@@ -76,10 +76,8 @@ public class Iteratees {
             this.error = error;
         }
     }
-    public static class ForwarderActor extends UntypedActor {
-        
+    private static class ForwarderActor extends UntypedActor {
         private final Forward forward;
-
         public ForwarderActor(Forward forward) {
             this.forward = forward;
         }
@@ -107,6 +105,12 @@ public class Iteratees {
         }
         public static <T> Iteratee<Byte[], Unit> toStream(OutputStream os) {
             return new OutputStreamIteratee(os);
+        }
+        public static <T> Iteratee<T, Unit> ignore() {
+            return new IgnoreIteratee<T>();
+        }
+        public static <T> Iteratee<T, Option<T>> head() {
+            return new HeadIteratee<T>();
         }
     }
     public static class OutputStreamIteratee extends Iteratee<Byte[], Unit> {
@@ -136,6 +140,27 @@ public class Iteratees {
             for (EOF e : F.caseClassOf(EOF.class, msg)) {
                 stream.flush();
                 stream.close();
+                done(Unit.unit(), sender, self);
+            }
+        }
+    }
+    public static class HeadIteratee<T> extends Iteratee<T, Option<T>> {
+        public void onReceive(Object msg, ActorRef sender, ActorRef self) throws Exception {
+            for (Elem e : F.caseClassOf(Elem.class, msg)) {
+                for(Object o : e.get()) {
+                    Option<T> opt = Option.apply((T) o);
+                    done(opt, sender, self);
+                }
+            }
+            for (EOF e : F.caseClassOf(EOF.class, msg)) {
+                Option<T> opt = Option.none();
+                done(opt, sender, self);
+            }
+        }
+    }
+    public static class IgnoreIteratee<T> extends Iteratee<T, Unit> {
+        public void onReceive(Object msg, ActorRef sender, ActorRef self) throws Exception {
+            for (EOF e : F.caseClassOf(EOF.class, msg)) {
                 done(Unit.unit(), sender, self);
             }
         }
@@ -229,13 +254,13 @@ public class Iteratees {
         public static <T> Enumerator<String> fromFileLines(File f) {
             return new FromFileLinesEnumerator(f);
         }
-        public static <T> PushEnumerator<T> imperative(Class<T> clazz) {
+        public static <T> PushEnumerator<T> unicast(Class<T> clazz) {
             return new PushEnumerator<T>();
         }
-        public static <T> PushEnumerator<T> fromCallback(long every, TimeUnit unit, final Function<Unit, Option<T>> callback) {
+        public static <T> PushEnumerator<T> generate(long every, TimeUnit unit, final Function<Unit, Option<T>> callback) {
             return new CallbackPushEnumerator<T>(every, unit, callback);
         }
-        public static <T> HubEnumerator<T> hub(Enumerator<T> enumerator) {
+        public static <T> HubEnumerator<T> broadcast(Enumerator<T> enumerator) {
             return new HubEnumerator(enumerator);
         }
     }   
