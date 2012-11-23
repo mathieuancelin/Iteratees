@@ -28,6 +28,7 @@ import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
@@ -302,7 +303,7 @@ public class Iteratees {
     
     private static class DecoratedEnumerator<I> extends Enumerator<I> {
         private final Enumerator<?> fromEnumerator;
-        private final List<Function> functions = new ArrayList<Function>();
+        private final List<Function> functions = new CopyOnWriteArrayList<Function>();
         private Iteratee<I, ?> toIteratee;
         private final Enumeratee throughEnumeratee = Enumeratee.map(new Function<Object, Object>() {
             @Override
@@ -722,7 +723,7 @@ public class Iteratees {
         }
     }
     public static class HubEnumerator<T> {
-        private final List<ActorRef> iteratees = new ArrayList<ActorRef>();
+        private final List<ActorRef> iteratees = new CopyOnWriteArrayList<ActorRef>();
         private final Enumerator<T> fromEnumerator;
         private ActorRef enumerator;
         private final ActorRef internalIteratee;
