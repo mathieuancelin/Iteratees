@@ -1,1 +1,7 @@
-/target/
+
+*.jar
+*.war
+*.ear
+*.class
+target
+.DS_Store
