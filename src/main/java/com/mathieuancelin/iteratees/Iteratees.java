@@ -177,21 +177,9 @@ public class Iteratees {
         ActorRef enumerator;
         ActorRef iteratee;
         public <O> Promise<O> applyOn(Iteratee<I, O> it) {
-            final Iteratee<I, O> finalIt = it;
             Promise<O> res = it.getAsyncResult();
-            Props itProp = new Props().withCreator(new UntypedActorFactory() {
-                public Actor create() {
-                    return new ForwarderActor(finalIt);
-                }
-            });
-            final Enumerator<I> en = this; 
-            Props thisProp = new Props().withCreator(new UntypedActorFactory() {
-                public Actor create() {
-                    return new ForwarderActor(en);
-                }
-            });
-            iteratee = system().actorOf(itProp, UUID.randomUUID().toString());
-            enumerator = system().actorOf(thisProp, UUID.randomUUID().toString());
+            iteratee = system().actorOf(forwarderActorProps(it), UUID.randomUUID().toString());
+            enumerator = system().actorOf(forwarderActorProps(this), UUID.randomUUID().toString());
             enumerator.tell(Run.INSTANCE, iteratee);
             return res;
         }
@@ -326,24 +314,9 @@ public class Iteratees {
         public <O> Promise<O> applyOn(Iteratee<I, O> it) {
             toIteratee = it;
             Promise<O> res = it.getAsyncResult();
-            Props iterateeProp = new Props().withCreator(new UntypedActorFactory() {
-                public Actor create() {
-                    return new ForwarderActor(toIteratee);
-                }
-            });
-            Props fromEnumeratorProp = new Props().withCreator(new UntypedActorFactory() {
-                public Actor create() {
-                    return new ForwarderActor(fromEnumerator);
-                }
-            });
-            Props throughEnumerateeProp = new Props().withCreator(new UntypedActorFactory() {
-                public Actor create() {
-                    return new ForwarderActor(throughEnumeratee);
-                }
-            });
-            iteratee = system().actorOf(iterateeProp, UUID.randomUUID().toString());
-            ActorRef enumeratee = system().actorOf(throughEnumerateeProp, UUID.randomUUID().toString());
-            enumerator = system().actorOf(fromEnumeratorProp, UUID.randomUUID().toString());
+            iteratee = system().actorOf(forwarderActorProps(toIteratee), UUID.randomUUID().toString());
+            ActorRef enumeratee = system().actorOf(forwarderActorProps(throughEnumeratee), UUID.randomUUID().toString());
+            enumerator = system().actorOf(forwarderActorProps(fromEnumerator), UUID.randomUUID().toString());
             throughEnumeratee.setFromEnumerator(enumerator);
             throughEnumeratee.setToIteratee(iteratee);
             enumerator.tell(Run.INSTANCE, enumeratee);
@@ -678,21 +651,10 @@ public class Iteratees {
         @Override
         public <O> Promise<O> applyOn(final Iteratee<T, O> it) {
             Promise<O> res = it.getAsyncResult();
-            Props itProp = new Props().withCreator(new UntypedActorFactory() {
-                public Actor create() {
-                    return new ForwarderActor(it);
-                }
-            });
-            finalIteratee = system().actorOf(itProp, UUID.randomUUID().toString());
+            finalIteratee = system().actorOf(forwarderActorProps(it), UUID.randomUUID().toString());
             for (Enumerator e : enumerators) {
-                final Enumerator en = e;
                 e.iteratee = globalIteratee;
-                Props enProp = new Props().withCreator(new UntypedActorFactory() {
-                    public Actor create() {
-                        return new ForwarderActor(en);
-                    }
-                });
-                e.enumerator = system().actorOf(enProp, UUID.randomUUID().toString());
+                e.enumerator = system().actorOf(forwarderActorProps(e), UUID.randomUUID().toString());
                 e.enumerator.tell(Run.INSTANCE, globalIteratee);
             }
             return res;
@@ -772,21 +734,11 @@ public class Iteratees {
             }), UUID.randomUUID().toString());
         }
         public HubEnumerator<T> add(final Iteratee<T, ?> iteratee) {
-            Props itProp = new Props().withCreator(new UntypedActorFactory() {
-                public Actor create() {
-                    return new ForwarderActor(iteratee);
-                }
-            });
-            iteratees.add(system().actorOf(itProp, UUID.randomUUID().toString()));
+            iteratees.add(system().actorOf(forwarderActorProps(iteratee), UUID.randomUUID().toString()));
             return this;
         }
         public void broadcast() {
-            Props from = new Props().withCreator(new UntypedActorFactory() {
-                public Actor create() {
-                    return new ForwarderActor(fromEnumerator);
-                }
-            });
-            enumerator = system().actorOf(from, UUID.randomUUID().toString());
+            enumerator = system().actorOf(forwarderActorProps(fromEnumerator), UUID.randomUUID().toString());
             fromEnumerator.enumerator = enumerator;
             fromEnumerator.iteratee = internalIteratee;
             enumerator.tell(Run.INSTANCE, internalIteratee);
@@ -802,5 +754,13 @@ public class Iteratees {
             enumerator.tell(PoisonPill.getInstance());
             internalIteratee.tell(PoisonPill.getInstance());
         }
+    }
+    
+    private static Props forwarderActorProps(final Forward f) {
+        return new Props().withCreator(new UntypedActorFactory() {
+            public Actor create() {
+                return new ForwarderActor(f);
+            }
+        });
     }
 }
