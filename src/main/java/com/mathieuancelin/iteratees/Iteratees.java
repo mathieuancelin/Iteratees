@@ -31,11 +31,11 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 
 public class Iteratees {
-    
+
     private static interface Akka {
         ActorSystem system();
     }
-    
+
     private static enum AkkaInstance implements Akka {
         AKKA {
             private final ActorSystem context = ActorSystem.create("IterateesSystem");
@@ -44,7 +44,7 @@ public class Iteratees {
             }
         }
     }
-    
+
     static {
         Runtime.getRuntime().addShutdownHook(new Thread() {
             @Override
@@ -53,11 +53,11 @@ public class Iteratees {
             }
         });
     }
-    
+
     public static ActorSystem system() {
         return AkkaInstance.AKKA.system();
     }
-    
+
     public static final class Elem<I> {
         private final I e;
         public Elem(I e) { this.e = e; }
@@ -83,7 +83,7 @@ public class Iteratees {
         public void onReceive(Object o) throws Exception {
             forward.onReceive(o, sender(), self());
         }
-        
+
     }
     public static interface Forward {
         public void onReceive(Object msg, ActorRef sender, ActorRef self) throws Exception;
@@ -127,7 +127,7 @@ public class Iteratees {
                             byte[] b = new byte[s.length];
                             for (int i = 0; i < s.length; i++) {
                                 if (b != null && s[i] != null)
-                                b[i] = s[i];
+                                    b[i] = s[i];
                             }
                             stream.write(b);
                         } catch (Exception ex) { ex.printStackTrace(); }
@@ -195,9 +195,15 @@ public class Iteratees {
                 }
             }
         }
+        void setEnumerator(ActorRef ref) {
+            this.enumerator = ref;
+        }
+        void setIteratee(ActorRef ref) {
+            this.iteratee = ref;
+        }
         public abstract boolean hasNext();
         public abstract Option<I> next();
-        void onApply() { 
+        void onApply() {
             //System.out.println("on apply from Enumerator");
         }
         ActorRef enumerator;
@@ -264,7 +270,7 @@ public class Iteratees {
         public static <T> HubEnumerator<T> broadcast(Enumerator<T> enumerator) {
             return new HubEnumerator(enumerator);
         }
-    }   
+    }
     public static abstract class Enumeratee<I, O> implements Forward {
         private ActorRef fromEnumerator;
         private ActorRef toIteratee;
@@ -287,7 +293,7 @@ public class Iteratees {
                 for (I elem : el.get()) {
                     O out = tranform.apply(elem);
                     if (out != null)
-                    toIteratee.tell(new Elem<O>(out), self);
+                        toIteratee.tell(new Elem<O>(out), self);
                 }
             }
             for (EOF eof : F.caseClassOf(EOF.class, msg)) {
@@ -312,11 +318,11 @@ public class Iteratees {
             return new MapEnumeratee<I, O>(transform);
         }
     }
-    
+
     /**************************************************************************/
     /**************************************************************************/
     /**************************************************************************/
-    
+
     private static class DecoratedEnumerator<I> extends Enumerator<I> {
         private final Enumerator<?> fromEnumerator;
         private final List<Function> functions = new CopyOnWriteArrayList<Function>();
@@ -327,10 +333,10 @@ public class Iteratees {
                 return applyTransforms(t);
             }
         });
-        DecoratedEnumerator(Enumerator<?> fromEnumerator, 
-                Enumeratee<?, I>... throughEnumeratees) {
+        DecoratedEnumerator(Enumerator<?> fromEnumerator,
+                            Enumeratee<?, I>... throughEnumeratees) {
             this.fromEnumerator = fromEnumerator;
-            if (throughEnumeratees != null && throughEnumeratees.length > 0) {  
+            if (throughEnumeratees != null && throughEnumeratees.length > 0) {
                 for (Enumeratee enumeratee : throughEnumeratees) {
                     functions.add(enumeratee.tranform);
                 }
@@ -338,7 +344,7 @@ public class Iteratees {
                 throw new RuntimeException("You have to provide at least one enumeratee");
             }
         }
-        
+
         @Override
         public <O> Promise<O> applyOn(Iteratee<I, O> it) {
             toIteratee = it;
@@ -346,6 +352,8 @@ public class Iteratees {
             iteratee = system().actorOf(forwarderActorProps(toIteratee), UUID.randomUUID().toString());
             ActorRef enumeratee = system().actorOf(forwarderActorProps(throughEnumeratee), UUID.randomUUID().toString());
             enumerator = system().actorOf(forwarderActorProps(fromEnumerator), UUID.randomUUID().toString());
+            fromEnumerator.setEnumerator(enumerator);
+            fromEnumerator.setIteratee(enumeratee);
             throughEnumeratee.setFromEnumerator(enumerator);
             throughEnumeratee.setToIteratee(iteratee);
             fromEnumerator.onApply();
@@ -376,6 +384,12 @@ public class Iteratees {
         @Override
         void onApply() {
             fromEnumerator.onApply();
+        }
+        void setEnumerator(ActorRef ref) {
+            this.fromEnumerator.setEnumerator(ref);
+        }
+        void setIteratee(ActorRef ref) {
+            this.fromEnumerator.setIteratee(ref);
         }
         @Override
         public <O> Enumerator<O> through(Enumeratee<I, O>... enumeratees) {
@@ -521,7 +535,7 @@ public class Iteratees {
         public Option<Byte[]> next() {
             byte[] bytes = new byte[chunkSize];
             Byte[] copy = new Byte[chunkSize];
-            try {    
+            try {
                 int numRead = is.read(bytes);
                 if (numRead == -1) {
                     close();
@@ -532,10 +546,10 @@ public class Iteratees {
                         i++;
                     }
                 }
-            } catch (Exception e) { 
-                e.printStackTrace(); 
+            } catch (Exception e) {
+                e.printStackTrace();
                 close();
-            } 
+            }
             return Option.some(copy);
         }
         private void close() {
@@ -607,6 +621,7 @@ public class Iteratees {
                 if (enumerator != null) {
                     enumerator.tell(Cont.INSTANCE, iteratee);
                 } else {
+                    System.out.println("null ...");
                     //throw new RuntimeException("Enumerator should not be null");
                 }
             } catch (Exception e) { e.printStackTrace(); }
@@ -616,7 +631,7 @@ public class Iteratees {
             iteratee.tell(EOF.INSTANCE, enumerator);
             enumerator.tell(Done.INSTANCE, iteratee);
         }
-    } 
+    }
     private static class CallbackPushEnumerator<T> extends PushEnumerator<T> {
         private final long every;
         private final TimeUnit unit;
@@ -654,7 +669,7 @@ public class Iteratees {
             if (cancel != null) {
                 cancel.cancel();
             }
-        }        
+        }
     }
     private static class InterleavedEnumerators<T> extends Enumerator<T> {
         private final List<Enumerator<T>> enumerators;
@@ -724,6 +739,16 @@ public class Iteratees {
                 e.onApply();
             }
         }
+        void setIteratee(ActorRef ref) {
+            for (Enumerator e : enumerators) {
+                e.setIteratee(ref);
+            }
+        }
+        void setEnumerator(ActorRef ref) {
+            for (Enumerator e : enumerators) {
+                e.setEnumerator(ref);
+            }
+        }
     }
     private static class ForeachIteratee<T> extends Iteratee<T, Unit> {
         private final Function<T, Unit> func;
@@ -734,8 +759,8 @@ public class Iteratees {
         public void onReceive(Object msg, ActorRef sender, ActorRef self) throws Exception {
             for (Elem e : F.caseClassOf(Elem.class, msg)) {
                 Elem<T> el = (Elem<T>) e;
-                for (T elem : el.get()) { 
-                   func.apply(elem);
+                for (T elem : el.get()) {
+                    func.apply(elem);
                 }
                 sender.tell(Cont.INSTANCE, self);
             }
@@ -820,7 +845,7 @@ public class Iteratees {
             internalIteratee.tell(PoisonPill.getInstance());
         }
     }
-    
+
     private static Props forwarderActorProps(final Forward f) {
         return new Props().withCreator(new UntypedActorFactory() {
             public Actor create() {
