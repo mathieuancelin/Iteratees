@@ -19,10 +19,8 @@ package com.mathieuancelin.iteratees;
 
 import akka.actor.*;
 import akka.util.Duration;
-import com.mathieuancelin.iteratees.F.Function;
-import com.mathieuancelin.iteratees.F.Option;
-import com.mathieuancelin.iteratees.F.Promise;
-import com.mathieuancelin.iteratees.F.Unit;
+import com.mathieuancelin.iteratees.F;
+import static com.mathieuancelin.iteratees.F.*;
 import java.io.*;
 import java.math.BigDecimal;
 import java.math.BigInteger;
@@ -199,6 +197,9 @@ public class Iteratees {
         }
         public abstract boolean hasNext();
         public abstract Option<I> next();
+        void onApply() { 
+            //System.out.println("on apply from Enumerator");
+        }
         ActorRef enumerator;
         ActorRef iteratee;
         public <O> Promise<O> applyOn(Iteratee<I, O> it) {
@@ -283,8 +284,10 @@ public class Iteratees {
         public void onReceive(Object msg, ActorRef sender, ActorRef self) throws Exception {
             for (Elem e : F.caseClassOf(Elem.class, msg)) {
                 Elem<I> el = (Elem<I>) e;
-                for (I elem : el.get()) { 
-                   toIteratee.tell(new Elem<O>(tranform.apply(elem)), self);
+                for (I elem : el.get()) {
+                    O out = tranform.apply(elem);
+                    if (out != null)
+                    toIteratee.tell(new Elem<O>(out), self);
                 }
             }
             for (EOF eof : F.caseClassOf(EOF.class, msg)) {
@@ -335,6 +338,7 @@ public class Iteratees {
                 throw new RuntimeException("You have to provide at least one enumeratee");
             }
         }
+        
         @Override
         public <O> Promise<O> applyOn(Iteratee<I, O> it) {
             toIteratee = it;
@@ -344,6 +348,7 @@ public class Iteratees {
             enumerator = system().actorOf(forwarderActorProps(fromEnumerator), UUID.randomUUID().toString());
             throughEnumeratee.setFromEnumerator(enumerator);
             throughEnumeratee.setToIteratee(iteratee);
+            fromEnumerator.onApply();
             enumerator.tell(Run.INSTANCE, enumeratee);
             return res;
         }
@@ -356,15 +361,26 @@ public class Iteratees {
         }
         @Override
         public boolean hasNext() {
-            throw new RuntimeException("Should never happen");
+            return fromEnumerator.hasNext();
+            //throw new RuntimeException("Should never happen");
         }
         @Override
         public Option<I> next() {
-            throw new RuntimeException("Should never happen");
+            for (Object o : fromEnumerator.next()) {
+                I i = (I) applyTransforms(o);
+                return Option.some(i);
+            }
+            return Option.none();
+            //throw new RuntimeException("Should never happen");
+        }
+        @Override
+        void onApply() {
+            fromEnumerator.onApply();
         }
         @Override
         public <O> Enumerator<O> through(Enumeratee<I, O>... enumeratees) {
-            throw new RuntimeException("Not allowed. Try to chained Enumeratee instead");
+            return new DecoratedEnumerator<O>(this, enumeratees);
+            //throw new RuntimeException("Not allowed. Try to chained Enumeratee instead");
         }
     }
     public static class IterableEnumerator<T> extends Enumerator<T> {
@@ -591,7 +607,7 @@ public class Iteratees {
                 if (enumerator != null) {
                     enumerator.tell(Cont.INSTANCE, iteratee);
                 } else {
-                    throw new RuntimeException("Enumerator should not be null");
+                    //throw new RuntimeException("Enumerator should not be null");
                 }
             } catch (Exception e) { e.printStackTrace(); }
         }
@@ -626,6 +642,10 @@ public class Iteratees {
                     }
                 }
             });
+        }
+        @Override
+        void onApply() {
+            schedule();
         }
         private Cancellable cancel;
         @Override
@@ -663,15 +683,27 @@ public class Iteratees {
                 }
             });
             globalIteratee = system().actorOf(iterateeProp, UUID.randomUUID().toString());
-            this.enumerators = Arrays.asList(enumerators);
+            this.enumerators = new CopyOnWriteArrayList<Enumerator<T>>(Arrays.asList(enumerators));
         }
         @Override
         public Option<T> next() {
-            throw new RuntimeException("next should never be called");
+            for (Enumerator en : enumerators) {
+                if (en.hasNext()) {
+                    return en.next();
+                }
+            }
+            return Option.none();
+            //throw new RuntimeException("next should never be called");
         }
         @Override
         public boolean hasNext() {
-            throw new RuntimeException("next should never be called");
+            for (Enumerator en : enumerators) {
+                if (en.hasNext()) {
+                    return true;
+                }
+            }
+            return true;
+            //throw new RuntimeException("next should never be called");
         }
         @Override
         public <O> Promise<O> applyOn(final Iteratee<T, O> it) {
@@ -681,8 +713,16 @@ public class Iteratees {
                 e.iteratee = globalIteratee;
                 e.enumerator = system().actorOf(forwarderActorProps(e), UUID.randomUUID().toString());
                 e.enumerator.tell(Run.INSTANCE, globalIteratee);
+                e.onApply();
             }
             return res;
+        }
+
+        @Override
+        void onApply() {
+            for (Enumerator e : enumerators) {
+                e.onApply();
+            }
         }
     }
     private static class ForeachIteratee<T> extends Iteratee<T, Unit> {
