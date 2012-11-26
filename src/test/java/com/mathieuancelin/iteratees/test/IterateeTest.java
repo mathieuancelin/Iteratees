@@ -134,18 +134,13 @@ public class IterateeTest {
     @Test
     public void testFileEnumerator() throws Exception {
         final AtomicInteger count = new AtomicInteger(0);
-        Enumerator<Byte[]> fileEnum = Enumerator.fromFile(new File("src/main/java/com/mathieuancelin/iteratees/Iteratees.java"), 1024);
-        Promise<Unit> promise = fileEnum.applyOn(Iteratee.foreach(new Function<Byte[], Unit>() {
+        Enumerator<byte[]> fileEnum = Enumerator.fromFile(new File("src/main/java/com/mathieuancelin/iteratees/Iteratees.java"), 1024);
+        Promise<Unit> promise = fileEnum.applyOn(Iteratee.foreach(new Function<byte[], Unit>() {
             @Override
-            public Unit apply(Byte[] t) {
-                byte[] bytes = new byte[t.length];
-                try {
-                    int i = 0;
-                    for (Byte b : t) {
-                        bytes[i] = b;
-                        i++;
-                    }
-                } catch (Exception e) {}
+            public Unit apply(byte[] t) {
+                for (byte b : t) {
+                    System.out.print(b);
+                }
                 count.incrementAndGet();
                 return Unit.unit();
             }
