@@ -1,14 +1,12 @@
 package com.mathieuancelin.iteratees.test;
 
-import com.mathieuancelin.iteratees.F;
+import static com.mathieuancelin.iteratees.F.*;
 import com.mathieuancelin.iteratees.F.Function;
 import com.mathieuancelin.iteratees.F.Promise;
 import com.mathieuancelin.iteratees.F.Unit;
-import com.mathieuancelin.iteratees.Iteratees;
 import static com.mathieuancelin.iteratees.Iteratees.*;
-import com.mathieuancelin.iteratees.Iteratees.Enumerator;
 import com.mathieuancelin.iteratees.Iteratees.Iteratee;
-import com.mathieuancelin.iteratees.test.Streams.Event;
+import static com.mathieuancelin.iteratees.test.Streams.*;
 import java.util.concurrent.TimeUnit;
 import org.junit.Test;
 
@@ -22,65 +20,58 @@ public class AStreamsTest {
     
     public Promise<Unit> feed(final String role, final int lowerBound, final int higherBound) {
 
-        Iteratees.Enumeratee<Streams.Event, Streams.Event> secure = Iteratees.Enumeratee.map(new F.Function<Streams.Event, Streams.Event>() {
+        Enumeratee<Event, Event> secure = Enumeratee.collect(new Function<Event, Option<Event>>() {
             @Override
-            public Streams.Event apply(Streams.Event o) {
-                for (Streams.SystemStatus status : F.caseClassOf(Streams.SystemStatus.class, o)) {
+            public Option<Event> apply(Event o) {
+                for (SystemStatus status : caseClassOf(SystemStatus.class, o)) {
                     if (role.equals("MANAGER")) {
-                        return status;
+                        return Option.<Event>some(status);
                     }
                 }
-                for (Streams.Operation operation : F.caseClassOf(Streams.Operation.class ,o)) {
+                for (Operation operation : caseClassOf(Operation.class, o)) {
                     if (operation.level.equals("public")) {
-                         return operation;
+                        return Option.<Event>some(operation);
                     } else {
                         if (role.equals("MANAGER")) {
-                            return operation;
+                            return Option.<Event>some(operation);
                         }
                     }
                 }
-                return o;
+                return Option.none();
             }
         });
 
-        Iteratees.Enumeratee<Streams.Event, Streams.Event> inBounds = Iteratees.Enumeratee.map(new F.Function<Streams.Event, Streams.Event>() {
+        Enumeratee<Event, Event> inBounds = Enumeratee.collect(new Function<Event, Option<Event>>() {
             @Override
-            public Streams.Event apply(Streams.Event o) {
-                for (Streams.SystemStatus status : F.caseClassOf(Streams.SystemStatus.class, o)) {
-                    return status;
+            public Option<Event> apply(Event o) {
+                for (SystemStatus status : caseClassOf(SystemStatus.class, o)) {
+                    return Option.<Event>some(status);
                 }
-                for (Streams.Operation operation : F.caseClassOf(Streams.Operation.class ,o)) {
+                for (Operation operation : caseClassOf(Operation.class ,o)) {
                     if (operation.amount > lowerBound && operation.amount < higherBound) {
-                        return operation;
+                        return Option.<Event>some(operation);
                     }
                 }
-                return o;
+                return Option.none();
             }
         });
-        
-        Iteratees.Enumeratee<Streams.Event, String> asJson = Iteratees.Enumeratee.map(new F.Function<Streams.Event, String>() {
+
+        Enumeratee<Event, String> asJson = Enumeratee.map(new Function<Event, String>() {
             @Override
-            public String apply(Streams.Event o) {
-                for (Streams.SystemStatus status : F.caseClassOf(Streams.SystemStatus.class, o)) {
+            public String apply(Event o) {
+                for (SystemStatus status : caseClassOf(SystemStatus.class, o)) {
                     return "{\"type\":\"status\", \"message\":\"" + status.message + "\"}";
                 }
-                for (Streams.Operation operation : F.caseClassOf(Streams.Operation.class ,o)) {
+                for (Operation operation : caseClassOf(Operation.class ,o)) {
                     return "{\"type\":\"operation\", \"amount\":" + operation.amount + ", \"visibility\":\"" + operation.level + "\"}";
                 }
                 return "";
             }
         });
         
-        Iteratee<Event, Unit> consumer = Iteratee.foreach(new Function<Event, Unit>() {
-            public Unit apply(Event t) {
-                System.out.println("*** " + t.toString());
-                return Unit.unit();
-            }
-        });
-        
         Iteratee<String, Unit> strConsumer = Iteratee.foreach(new Function<String, Unit>() {
             public Unit apply(String t) {
-                System.out.println("=== " + t);
+                System.out.println(t);
                 return Unit.unit();
             }
         });

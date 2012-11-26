@@ -29,6 +29,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class Iteratees {
 
@@ -316,6 +317,9 @@ public class Iteratees {
         }
         public static <I,O> Enumeratee<I,O> map(Function<I,O> transform) {
             return new MapEnumeratee<I, O>(transform);
+        }
+        public static <I,O> Enumeratee<I,I> collect(Function<I,Option<I>> transform) {
+            return new CollectEnumeratee<I>(transform);
         }
     }
 
@@ -621,7 +625,7 @@ public class Iteratees {
                 if (enumerator != null) {
                     enumerator.tell(Cont.INSTANCE, iteratee);
                 } else {
-                    System.out.println("null ...");
+                    //System.out.println("null ...");
                     //throw new RuntimeException("Enumerator should not be null");
                 }
             } catch (Exception e) { e.printStackTrace(); }
@@ -636,6 +640,7 @@ public class Iteratees {
         private final long every;
         private final TimeUnit unit;
         private final Function<Unit, Option<T>> callback;
+        private final AtomicBoolean scheduled = new AtomicBoolean(false);
         public CallbackPushEnumerator(long every, TimeUnit unit, Function<Unit, Option<T>> callback) {
             this.every = every;
             this.unit = unit;
@@ -644,7 +649,9 @@ public class Iteratees {
         @Override
         public <O> Promise<O> applyOn(Iteratee<T, O> it) {
             Promise<O> promise = super.applyOn(it);
-            schedule();
+            if (!scheduled.get()) {
+                schedule();
+            }
             return promise;
         }
         private void schedule() {
@@ -657,10 +664,13 @@ public class Iteratees {
                     }
                 }
             });
+            scheduled.set(true);
         }
         @Override
         void onApply() {
-            schedule();
+            if (!scheduled.get()) {
+                schedule();
+            }
         }
         private Cancellable cancel;
         @Override
@@ -700,15 +710,20 @@ public class Iteratees {
             globalIteratee = system().actorOf(iterateeProp, UUID.randomUUID().toString());
             this.enumerators = new CopyOnWriteArrayList<Enumerator<T>>(Arrays.asList(enumerators));
         }
+        private ConcurrentLinkedQueue<Option<T>> queue = new ConcurrentLinkedQueue<Option<T>>();
         @Override
         public Option<T> next() {
-            for (Enumerator en : enumerators) {
-                if (en.hasNext()) {
-                    return en.next();
+            if (queue.isEmpty()) {
+                for (Enumerator en : enumerators) {
+                    if (en.hasNext()) {
+                        queue.offer(en.next());
+                    }
                 }
             }
+            if (!queue.isEmpty()) {
+                return queue.poll();
+            }
             return Option.none();
-            //throw new RuntimeException("next should never be called");
         }
         @Override
         public boolean hasNext() {
@@ -718,7 +733,6 @@ public class Iteratees {
                 }
             }
             return true;
-            //throw new RuntimeException("next should never be called");
         }
         @Override
         public <O> Promise<O> applyOn(final Iteratee<T, O> it) {
@@ -774,6 +788,20 @@ public class Iteratees {
             super(transform);
         }
     }
+    private static class CollectEnumeratee<I> extends Enumeratee<I, I> {
+        public CollectEnumeratee(final Function<I, Option<I>> predicate) {
+            super(new Function<I, I>() {
+                @Override
+                public I apply(I i) {
+                    Option<I> opt = predicate.apply(i);
+                    for (I o : opt) {
+                        return o;
+                    }
+                    return null;
+                }
+            });
+        }
+    }
     public static class HubEnumerator<T> {
         private final List<ActorRef> iteratees = new CopyOnWriteArrayList<ActorRef>();
         private final Enumerator<T> fromEnumerator;
@@ -822,6 +850,7 @@ public class Iteratees {
                     };
                 }
             }), UUID.randomUUID().toString());
+            broadcast();
         }
         public HubEnumerator<T> add(final Iteratee<T, ?> iteratee) {
             iteratees.add(system().actorOf(forwarderActorProps(iteratee), UUID.randomUUID().toString()));
@@ -845,7 +874,6 @@ public class Iteratees {
             internalIteratee.tell(PoisonPill.getInstance());
         }
     }
-
     private static Props forwarderActorProps(final Forward f) {
         return new Props().withCreator(new UntypedActorFactory() {
             public Actor create() {
