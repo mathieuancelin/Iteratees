@@ -810,7 +810,7 @@ public class Iteratees {
         private final Enumerator<T> fromEnumerator;
         private ActorRef enumerator;
         private final ActorRef internalIteratee;
-        private final boolean start;
+        private boolean start = false;
         public HubEnumerator(Enumerator<T> fromEnumerator, boolean start) {
             this.fromEnumerator = fromEnumerator;
             internalIteratee = system().actorOf(new Props().withCreator(new UntypedActorFactory() {
@@ -854,10 +854,10 @@ public class Iteratees {
                     };
                 }
             }), UUID.randomUUID().toString());
-            this.start = start;
             if (start) {
                 broadcast();
             }
+            this.start = start;
         }
         public HubEnumerator<T> add(final Iteratee<T, ?> iteratee) {
             iteratees.add(system().actorOf(forwarderActorProps(iteratee), UUID.randomUUID().toString()));
