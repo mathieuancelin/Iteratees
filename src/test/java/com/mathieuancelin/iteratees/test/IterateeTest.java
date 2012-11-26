@@ -278,7 +278,6 @@ public class IterateeTest {
     public void testHubEnumerator() throws Exception {
         final CountDownLatch latch = new CountDownLatch(6);
         Enumerator<String> enumerator = Enumerator.of("Hello", "World");
-        HubEnumerator<String> hub = Enumerator.broadcast(enumerator);
         Iteratee<String, Unit> it1 = Iteratee.foreach(new Function<String, Unit>() {
             @Override
             public Unit apply(String t) {
@@ -303,7 +302,8 @@ public class IterateeTest {
                 return Unit.unit();
             }
         });
-        hub.add(it1).add(it2).add(it3).broadcast();
+        HubEnumerator<String> hub = Enumerator.broadcast(enumerator, false).add(it1).add(it2).add(it3);
+        hub.broadcast();
         latch.await();
         hub.stop();
         Assert.assertEquals(0, latch.getCount());
@@ -319,7 +319,6 @@ public class IterateeTest {
                 return Option.apply(date);
             }
         });
-        HubEnumerator<String> hub = Enumerator.broadcast(enumerator);
         Iteratee<String, Unit> it1 = Iteratee.foreach(new Function<String, Unit>() {
             @Override
             public Unit apply(String t) {
@@ -344,7 +343,8 @@ public class IterateeTest {
                 return Unit.unit();
             }
         });
-        hub.add(it1).add(it2).add(it3).broadcast();
+        HubEnumerator<String> hub = Enumerator.broadcast(enumerator, false).add(it1).add(it2).add(it3);
+        hub.broadcast();
         latch.await(10, TimeUnit.SECONDS);
         hub.stop();
         Assert.assertEquals(0, latch.getCount());
@@ -398,7 +398,5 @@ public class IterateeTest {
                 done(builder.toString(), sender, self);
             }
         }
-    } 
-    
-    
+    }     
 }
