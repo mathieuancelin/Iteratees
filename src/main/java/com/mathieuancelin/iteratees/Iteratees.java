@@ -288,6 +288,19 @@ public class Iteratees {
                 }
             };
         }
+        public static <T> Enumerator<T> interleave(final Class<T> clazz, final Enumerator<T>... enumerators) {
+            final PushEnumerator<T> push = Enumerator.unicast(clazz);
+            for (Enumerator<T> enumerator : enumerators) {
+                enumerator.applyOn(Iteratee.foreach(new Function<T, Unit>() {
+                    @Override
+                    public Unit apply(T value) {
+                        push.push(value);
+                        return Unit.unit();
+                    }
+                }));
+            }
+            return push;
+        }
     }
     public static abstract class Enumeratee<I, O> implements Forward {
         private ActorRef fromEnumerator;
