@@ -125,11 +125,6 @@ public class Iteratees {
                 for (byte[] s : el.get()) {
                     if (s != null) {
                         try {
-                            /**byte[] b = new byte[s.length];
-                            for (int i = 0; i < s.length; i++) {
-                                if (b != null && s[i] != null)
-                                    b[i] = s[i];
-                            }**/
                             stream.write(s);
                         } catch (Exception ex) { ex.printStackTrace(); }
                     }
@@ -280,6 +275,18 @@ public class Iteratees {
         }
         public static <T> HubEnumerator<T> broadcast(Enumerator<T> enumerator, boolean start) {
             return new HubEnumerator(enumerator, start);
+        }
+        public static <T> Enumerator<T> eof() {
+            return new Enumerator<T>() {
+                @Override
+                public boolean hasNext() {
+                    return false;
+                }
+                @Override
+                public Option<T> next() {
+                    return Option.none();
+                }
+            };
         }
     }
     public static abstract class Enumeratee<I, O> implements Forward {
